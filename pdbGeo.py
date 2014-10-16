@@ -1,4 +1,3 @@
-__author__ = 'dim'
 #!/usr/bin/env python
 from glob import glob
 from itertools import combinations_with_replacement
@@ -9,15 +8,6 @@ from numpy.linalg import norm
 from math import ceil
 import csv
 import pickle
-
-
-def getnormal(pqr):
-    try:
-        u = Universe(pqr)
-    except:
-        return None
-    return __getnormal(u)
-
 
 def __getnormal(univ, atoms=(58, 74, 133)):
     if len(atoms) != 3:
@@ -34,49 +24,31 @@ def __getnormal(univ, atoms=(58, 74, 133)):
     axb = cross(a, b)
     return axb/norm(axb)
 
+def get_universe(infile):
+	try: 
+		u = Universe(infile, format='pqr')
+		return u
+	except:
+		print '%s is not a valid pqr file.'% (infile,)
+	try: 
+		u = Universe(infile, format='pdb')
+		return u
+	except:
+		print '%s is not a valid pdb file.'% (infile,)
 
-def alignstructures(pdbs, ref=None, resids=(58, 74, 133, 184, 220)):
-    sele = []
-    if ref == None:
-        ref = pdbs.pop()
-    for item in resids:
-        sele.append('resid '+str(item))
-    ref0 = Universe(ref, format='pdb')
-    temp = ' or '.join(sele)
-    sele = 'protein and name CA and ('+temp+')'
-    for item in pdbs:
-        if item != ref:
-            mob = Universe(item, format='pdb')
-            alignto(mob, ref0, select=sele, mass_weighted=True)
-            mob.atoms.write(item[:-4]+'.aln.pdb')
-    return
+def get_region(pqr, start, stop):
+	u = get_universe(pqr)
+	return __getregion(u, start, stop)
 
-
-def getregion(pqr, start, stop):
-    try:
-        u = Universe(pqr, format='pqr')
-    except:
-        try:
-            u = Universe(pqr, format='pdb')
-        except:
-            return None
-    return __getregion(u, start, stop)
-
-
-def __getregion(u, start, stop):
-    A = u.selectAtoms('name CA and resid %d' % (start,))
+def __getregion(u, start, stop, atom='CA'):
+    A = u.selectAtoms('name %s and resid %d' % (atom,start))
     start += 1
     while start <= stop:
-        A += u.selectAtoms('name CA and resid %d' % (start,))
+        A += u.selectAtoms('name %s and resid %d' % (atom,start))
         start += 1
     return A
 
-
 def getvector(atoms):
-    return getangle(atoms)
-
-
-def getangle(atoms):
     angles = []
     for i in range(len(atoms)-1):
         temp = atoms[i+1].position+atoms[i].position
@@ -88,29 +60,16 @@ def getangle(atoms):
         return ret/norm(ret)
     return None
 
-
-def getrevpdbs():
-    return pickle.load(open('revpdbs.p', 'r'))
-    #return pickle.load(open('/share/Data/aligned_PDBs/revpdbs.p','r'))
-
-
 def angles(univ, plane, start, end):
-    try:
-        u = Universe(univ, format='pdb')
-    except:
-        try:
-            u = Universe(univ, format='pqr')
-        except:
-            return None, None
-    norm = __getnormal(u, atoms=plane)
-    temp = __getregion(u, float(start), float(end))
-    if norm is not None and temp is not None and len(temp) > 0:
-        angle = getangle(temp)
-        name = univ.split('/')[-1]
-        if angle is not None:
-            return name, dot(norm, angle)
-    return None, None
-
+	u = get_universe(univ)
+	norm = __getnormal(u, atoms=plane)
+	temp = __getregion(u, float(start), float(end))
+	if norm is not None and temp is not None and len(temp) > 0:
+		angle = getvector(temp)
+		name = univ.split('/')[-1]
+		if angle is not None:
+			return name, dot(norm, angle)
+	return None, None
 
 def traceprot(u, plane, start, end, window):
     start = int(start)
@@ -119,12 +78,11 @@ def traceprot(u, plane, start, end, window):
     while start < int(end)-int(window):
         temp = __getregion(u, float(start), float(start)+float(window))
         if norm is not None and temp is not None and len(temp) > 0:
-                angle = getangle(temp)
+                angle = getvector(temp)
                 if angle is not None:
                     trace.append((int(start), float(dot(norm, angle))))
                 start += 1
     return trace
-
 
 def getcolors(num):
     #returns a list containing (r,g,b) combinations for use in matplotlib
@@ -132,6 +90,27 @@ def getcolors(num):
     temp = range(1/(2*num), num)/norm(num)
     return combinations_with_replacement(temp, 3)
 
+def trace_prot(args):
+        import matplotlib.pyplot as plt
+        files = []
+        for kin in args.infiles:
+			files += glob('okdevs/*'+item.lower()+'*.okd')
+        ncolors = len(files)
+        ndiv = int(ceil(pow(ncolors, 0.33)))
+        colors = getcolors(ndiv)
+        for c in colors:
+            if len(files) > 0:
+                item = files.pop()
+                print item
+            else:
+                break
+		u = get_universe(item)
+        value = traceprot(u, plane, start, end, 5)
+        x, y = zip(*value)
+        plt.plot(x, y, color=c)
+        plt.xticks(range(1, 240, 5))
+        plt.show()
+        return
 
 def process_args(args):
     revpdb = getrevpdbs()
@@ -147,51 +126,16 @@ def process_args(args):
             #alignStructures(files)
         return
 
-    if args.t:
-        import matplotlib.pyplot as plt
-        files = []
-        for kin in args.kinase:
-            for item in revpdb[kin]:
-                files += glob('okdevs/*'+item.lower()+'*.okd')
-                #files += glob('/share/Data/aligned_PDBs/*'+item.lower()+'*.okd')
-        ncolors = len(files)
-        ndiv = int(ceil(pow(ncolors, 0.33)))
-        colors = getcolors(ndiv)
-        for c in colors:
-            if len(files) > 0:
-                item = files.pop()
-                print item
-            else:
-                break
-        try:
-            u = Universe(item, format='pqr')
-        except:
-            try:
-                u = Universe(item, format='pdb')
-            except:
-                print '\t'+item+' is not a properly formatted pdb or pqr file.'
-        value = traceprot(u, plane, start, end, 5)
-        x, y = zip(*value)
-        plt.plot(x, y, color=c)
-        plt.xticks(range(1, 240, 5))
-        plt.show()
-        return
-    if args.classes:
-        classes = getclasses()
-        for item in classes.keys():
-            print 'hi'
-            # check and graph each class
-    elif args.check:
-        for kin in args.kinase:
-            print kin, '\t', sorted(revpdb[kin])
+    elif args.t:
+		trace_prot(args)
+
     else:
         results, files, x, y = [], [], [], []
         if 'all' in args.kinase:
             args.kinase = revpdb.keys()
         for kin in args.kinase:
             for item in revpdb[kin]:
-                files += glob('okdevs/*'+item.lower()+'*.okd')
-                #files += glob('/share/Data/aligned_PDBs/*'+item.lower()+'*.okd')
+                files += glob('/share/Data/aligned_PDBs/*'+item.lower()+'*.okd')
         for item in files:
             name, value = angles(item, plane, start, end)
             if value != None:
@@ -208,7 +152,6 @@ def process_args(args):
                 plt.yticks(ind, x)
                 plt.show()
     return
-
 
 def getclasses():
     wanted = {}
@@ -228,14 +171,12 @@ if __name__ == '__main__':
             ./pdbGeo -r 1-100 EGFR
             ./pdbGeo -p 2,3,4 -r 20-50 -g EGFR
     """,formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('kinase', metavar='K', type=str, nargs='+', help='name of kinase to evaluate')
-    ap.add_argument('-c', '--check', action='store_true', help='check for pdb availability')
+    ap.add_argument('infiles', metavar='K', type=list, nargs='+', help='files to evaluate')
     ap.add_argument('-g', '--graph', action='store_true', help='sort and graph results')
     #default region - C-helix
     ap.add_argument('-r', '--region', type=str, action='store', default='39-53', help='region of interest')
     ap.add_argument('-p', '--plane', type=str, action='store', default='58,74,133', help='region of interest')
     ap.add_argument('--testing', action='store_true', help='testing')
-    ap.add_argument('--classes', action='store_true', help='testing')
     ap.add_argument('-t', action='store_true', help='trace protein')
     args = ap.parse_args()
     process_args(args)
