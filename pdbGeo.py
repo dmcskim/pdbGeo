@@ -58,7 +58,7 @@ def angles(univ, plane, start, end):
 def process_trajectory(args):
 	start, end = args.region.split('-')
 	plane = [int(x) for x in args.plane.split(',')]
-	univ = MDAnalysis.Universe(args.topo,args.traj)
+	univ = Universe(args.topo,args.traj)
 	results = []
 	for ts in univ.trajectory:
 		norm = get_normal(univ, atoms=plane)
@@ -126,7 +126,7 @@ if __name__ == '__main__':
             ./pdbGeo -r 1-100 <infiles>
             ./pdbGeo -p 2,3,4 -r 20-50 -g <infiles>
     """,formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('infiles', type=str, nargs='+', help='files to evaluate')
+    ap.add_argument('-i', '--infiles', type=str, nargs='+', help='files to evaluate')
     ap.add_argument('-g', '--graph', action='store_true', help='sort and graph results')
 
     #default region - C-helix
