@@ -84,6 +84,7 @@ def process_files(args):
 	plane = [int(x) for x in args.plane.split(',')]
 	results, files, x, y = [], [], [], []
 
+        print args,args.infiles
 	if len(args.infiles) > 1:
 		for item in args.infiles:
 			name, value = angles(item, plane, start, end)
@@ -135,6 +136,9 @@ if __name__ == '__main__':
     ap.add_argument('--topo', type=str, action='store', help='MD topology file.')
     ap.add_argument('--traj', type=str, action='store', help='MD trajectory file.')
     args = ap.parse_args()
-    process_args(args)
+    if args.infiles == None:
+        ap.print_help()
+    else:
+        process_args(args)
 
 
